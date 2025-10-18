@@ -3,7 +3,7 @@ const fs = require("fs");
 const path = require("path");
 
 // Get API key from environment variable
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_API_KEY = "AIzaSyBkd3RqC7uQtTdy54o5IjeAfVmVIoFkno4";
 
 if (!GEMINI_API_KEY) {
   console.error("Error: GEMINI_API_KEY environment variable is not set");
@@ -22,7 +22,8 @@ async function extractXtreamCodesFromWebsite(url) {
       timeout: 30000,
     });
 
-    const websiteContent = response.data;
+    const regex = /<body[^>]*>([\s\S]*?)<\/body>/i;
+    const match = response.data.match(regex);
     console.log("Website content fetched successfully");
 
     // Step 2: Prepare the prompt for AI API
@@ -30,7 +31,7 @@ async function extractXtreamCodesFromWebsite(url) {
         From this website page content, extract all xtream codes available in a json array in formatted objects containing the host and port, the username, and the password and the expiration date if available.
 
         Website Content:
-        ${websiteContent}
+        ${match[1] || ""}
 
         Return only the JSON array, no additional text or explanation.
         `;
@@ -65,17 +66,21 @@ async function extractXtreamCodesFromWebsite(url) {
     if (jsonMatch) {
       const jsonArray = JSON.parse(jsonMatch[0]);
       console.log(`Successfully extracted ${jsonArray.length} Xtream codes`);
-      
+
       const result = [];
       let verifiedCount = 0;
-      
+
       for (const code of jsonArray) {
         try {
           const res = await axios.get(
-            `${code.host}:${code.port}/player_api.php?username=${code.username}&password=${code.password}`,
+            `${(code.host.includes("http") ? "" : "http://") + code.host}:${
+              code.port
+            }/player_api.php?username=${code.username}&password=${
+              code.password
+            }`,
             { timeout: 10000 }
           );
-          
+
           if (res.data.user_info && res.data.user_info.auth === 1) {
             const si = res.data.server_info;
             const ui = res.data.user_info;
@@ -90,24 +95,26 @@ async function extractXtreamCodesFromWebsite(url) {
               https_port: si.https_port,
               server_protocol: si.server_protocol,
               timezone: si.timezone,
-              status: 'active'
+              status: "active",
             });
             verifiedCount++;
           }
         } catch (error) {
-          console.log(`Failed to verify code: ${code.username} - ${error.message}`);
+          console.log(
+            `Failed to verify code: ${code.username} - ${error.message}`
+          );
           // Still add the code but mark as unverified
           result.push({
             username: code.username,
             password: code.password,
             host: code.host,
             port: code.port,
-            status: 'unverified',
-            error: error.message
+            status: "unverified",
+            error: error.message,
           });
         }
       }
-      
+
       console.log(`Verified ${verifiedCount} out of ${jsonArray.length} codes`);
       return result;
     } else {
@@ -125,26 +132,26 @@ async function extractXtreamCodesFromWebsite(url) {
 
 function saveResultsToFile(results) {
   const date = new Date();
-  const dateString = date.toISOString().split('T')[0];
+  const dateString = date.toISOString().split("T")[0];
   const filename = `${dateString}.json`;
-  const resultsDir = path.join(__dirname, '..', 'results');
-  
+  const resultsDir = path.join(__dirname, "..", "results");
+
   // Create results directory if it doesn't exist
   if (!fs.existsSync(resultsDir)) {
     fs.mkdirSync(resultsDir, { recursive: true });
   }
-  
+
   const filePath = path.join(resultsDir, filename);
   const data = {
     extraction_date: date.toISOString(),
     total_codes: results.length,
-    active_codes: results.filter(r => r.status === 'active').length,
-    codes: results
+    active_codes: results.filter((r) => r.status === "active").length,
+    codes: results,
   };
-  
+
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
   console.log(`Results saved to: ${filePath}`);
-  
+
   return filePath;
 }
 
@@ -153,7 +160,7 @@ async function main() {
   const day = date.getDate();
   const month = date.getMonth() + 1;
   const year = date.getFullYear();
-  
+
   const websiteUrl =
     "https://stbemucode.com/" +
     day +
@@ -170,42 +177,44 @@ async function main() {
     ".html";
 
   try {
-    console.log(`Starting extraction for ${date.toISOString().split('T')[0]}`);
+    console.log(`Starting extraction for ${date.toISOString().split("T")[0]}`);
     console.log(`Target URL: ${websiteUrl}`);
-    
+
     const xtreamCodes = await extractXtreamCodesFromWebsite(websiteUrl);
     console.log(`\nExtracted ${xtreamCodes.length} Xtream codes`);
-    
+
     if (xtreamCodes.length === 0) {
-      console.log("No codes extracted, creating empty result file for tracking");
+      console.log(
+        "No codes extracted, creating empty result file for tracking"
+      );
     }
-    
+
     // Save results to file (even if empty)
     const filePath = saveResultsToFile(xtreamCodes);
-    
+
     return {
       success: true,
       codesFound: xtreamCodes.length,
-      activeCodes: xtreamCodes.filter(c => c.status === 'active').length,
-      filePath: filePath
+      activeCodes: xtreamCodes.filter((c) => c.status === "active").length,
+      filePath: filePath,
     };
   } catch (error) {
     console.error("Failed to extract Xtream codes:", error.message);
-    
+
     // Save error information
     const errorResult = {
       extraction_date: new Date().toISOString(),
       error: error.message,
-      codes: []
+      codes: [],
     };
-    
+
     const errorFilePath = saveResultsToFile([]);
     console.log(`Error info saved to: ${errorFilePath}`);
-    
+
     return {
       success: false,
       error: error.message,
-      filePath: errorFilePath
+      filePath: errorFilePath,
     };
   }
 }
