@@ -3,7 +3,7 @@ const fs = require("fs");
 const path = require("path");
 
 // Get API key from environment variable
-const GEMINI_API_KEY = "AIzaSyBkd3RqC7uQtTdy54o5IjeAfVmVIoFkno4";
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 if (!GEMINI_API_KEY) {
   console.error("Error: GEMINI_API_KEY environment variable is not set");
