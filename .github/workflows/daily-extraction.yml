@@ -5,45 +5,44 @@ on:
     - cron: '0 1 * * *'
   workflow_dispatch:
 
+# Add this section to request write permissions
+permissions:
+  contents: write
+
 jobs:
   extract:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
-        token: ${{ secrets.PAT_TOKEN }}
+        # This allows the action to push
+        persist-credentials: true
         
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '18'
-        cache: 'npm'
         
     - name: Install dependencies
       run: npm install
       
-    - name: Create results directory
-      run: mkdir -p results
-      
-    - name: Run extraction
-      run: node src/index.js
-      env:
-        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        
-    - name: Commit and push results
+    - name: Run extraction and commit
       run: |
+        mkdir -p results
+        node src/index.js
+        
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Actions"
         git add results/
         
-        # Check if there are changes to commit
-        if git diff --staged --quiet; then
+        # Only commit if there are changes
+        if git diff-index --quiet HEAD --; then
           echo "No changes to commit"
         else
           git commit -m "Add daily extraction results for $(date +'%Y-%m-%d')"
           git push
         fi
+      env:
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
