@@ -1,0 +1,23 @@
+{
+  "name": "xtream-codes-extractor",
+  "version": "1.0.0",
+  "description": "Automated Xtream Codes extraction and validation",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "axios": "^1.12.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "xtream",
+    "iptv",
+    "automation"
+  ],
+  "author": "",
+  "license": "MIT"
+}
