@@ -23,16 +23,30 @@ jobs:
     - name: Install dependencies
       run: npm install
       
+    - name: Create results directory
+      run: mkdir -p results
+      
     - name: Run extraction
       run: node src/index.js
       env:
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         NODE_ENV: production
         
-    - name: Commit and push if changes
+    - name: Check if results exist
+      id: check_results
+      run: |
+        if [ -n "$(ls -A results/ 2>/dev/null)" ]; then
+          echo "results_exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "results_exists=false" >> $GITHUB_OUTPUT
+          echo "No results files found"
+        fi
+        
+    - name: Commit and push if changes exist
+      if: steps.check_results.outputs.results_exists == 'true'
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         git add results/
-        git commit -m "Add daily extraction results for $(date +'%Y-%m-%d')" || exit 0
+        git commit -m "Add daily extraction results for $(date +'%Y-%m-%d')"
         git push
