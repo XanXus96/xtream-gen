@@ -36,7 +36,7 @@ async function extractXtreamCodesFromWebsite(url) {
         `;
 
     // Step 3: Send to AI API
-    console.log("Sending request to AI API...");
+    console.log("Sending request to Gemini API...");
     const aiResponse = await axios.post(
       `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
@@ -64,70 +64,87 @@ async function extractXtreamCodesFromWebsite(url) {
     const jsonMatch = responseText.match(/\[[\s\S]*\]/);
     if (jsonMatch) {
       const jsonArray = JSON.parse(jsonMatch[0]);
-      console.log("Successfully extracted Xtream codes:");
-      console.log(JSON.stringify(jsonArray, null, 2));
-
+      console.log(`Successfully extracted ${jsonArray.length} Xtream codes`);
+      
       const result = [];
+      let verifiedCount = 0;
+      
       for (const code of jsonArray) {
         try {
           const res = await axios.get(
             `${code.host}:${code.port}/player_api.php?username=${code.username}&password=${code.password}`,
             { timeout: 10000 }
           );
-          const si = res.data.server_info;
-          const ui = res.data.user_info;
-          result.push({
-            username: ui.username,
-            password: ui.password,
-            expires_at: new Date(ui.exp_date * 1000).toLocaleDateString(), // Convert timestamp to date
-            active_users: ui.active_cons,
-            max_users: ui.max_connections,
-            url: si.url,
-            port: si.port,
-            https_port: si.https_port,
-            server_protocol: si.server_protocol,
-            timezone: si.timezone,
-          });
+          
+          if (res.data.user_info && res.data.user_info.auth === 1) {
+            const si = res.data.server_info;
+            const ui = res.data.user_info;
+            result.push({
+              username: ui.username,
+              password: ui.password,
+              expires_at: new Date(ui.exp_date * 1000).toLocaleDateString(),
+              active_users: ui.active_cons,
+              max_users: ui.max_connections,
+              url: si.url,
+              port: si.port,
+              https_port: si.https_port,
+              server_protocol: si.server_protocol,
+              timezone: si.timezone,
+              status: 'active'
+            });
+            verifiedCount++;
+          }
         } catch (error) {
-          console.log(`Failed to verify code: ${code.username}`);
-          continue;
+          console.log(`Failed to verify code: ${code.username} - ${error.message}`);
+          // Still add the code but mark as unverified
+          result.push({
+            username: code.username,
+            password: code.password,
+            host: code.host,
+            port: code.port,
+            status: 'unverified',
+            error: error.message
+          });
         }
       }
+      
+      console.log(`Verified ${verifiedCount} out of ${jsonArray.length} codes`);
       return result;
     } else {
-      throw new Error("No JSON array found in the response");
+      console.log("No JSON array found in the AI response");
+      return [];
     }
   } catch (error) {
-    console.error("Error:", error.message);
+    console.error("Error in extraction:", error.message);
     if (error.response) {
       console.error("API Response status:", error.response.status);
-      console.error("API Response data:", error.response.data);
     }
-    throw error;
+    return [];
   }
 }
 
 function saveResultsToFile(results) {
   const date = new Date();
-  const dateString = date.toISOString().split("T")[0]; // YYYY-MM-DD format
+  const dateString = date.toISOString().split('T')[0];
   const filename = `${dateString}.json`;
-  const resultsDir = path.join(__dirname, "..", "results");
-
+  const resultsDir = path.join(__dirname, '..', 'results');
+  
   // Create results directory if it doesn't exist
   if (!fs.existsSync(resultsDir)) {
     fs.mkdirSync(resultsDir, { recursive: true });
   }
-
+  
   const filePath = path.join(resultsDir, filename);
   const data = {
     extraction_date: date.toISOString(),
     total_codes: results.length,
-    codes: results,
+    active_codes: results.filter(r => r.status === 'active').length,
+    codes: results
   };
-
+  
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
   console.log(`Results saved to: ${filePath}`);
-
+  
   return filePath;
 }
 
@@ -136,7 +153,7 @@ async function main() {
   const day = date.getDate();
   const month = date.getMonth() + 1;
   const year = date.getFullYear();
-
+  
   const websiteUrl =
     "https://stbemucode.com/" +
     day +
@@ -153,23 +170,42 @@ async function main() {
     ".html";
 
   try {
-    console.log(`Starting extraction for ${date.toISOString().split("T")[0]}`);
+    console.log(`Starting extraction for ${date.toISOString().split('T')[0]}`);
+    console.log(`Target URL: ${websiteUrl}`);
+    
     const xtreamCodes = await extractXtreamCodesFromWebsite(websiteUrl);
     console.log(`\nExtracted ${xtreamCodes.length} Xtream codes`);
-
-    // Save results to file
+    
+    if (xtreamCodes.length === 0) {
+      console.log("No codes extracted, creating empty result file for tracking");
+    }
+    
+    // Save results to file (even if empty)
     const filePath = saveResultsToFile(xtreamCodes);
-
+    
     return {
       success: true,
       codesFound: xtreamCodes.length,
-      filePath: filePath,
+      activeCodes: xtreamCodes.filter(c => c.status === 'active').length,
+      filePath: filePath
     };
   } catch (error) {
     console.error("Failed to extract Xtream codes:", error.message);
+    
+    // Save error information
+    const errorResult = {
+      extraction_date: new Date().toISOString(),
+      error: error.message,
+      codes: []
+    };
+    
+    const errorFilePath = saveResultsToFile([]);
+    console.log(`Error info saved to: ${errorFilePath}`);
+    
     return {
       success: false,
       error: error.message,
+      filePath: errorFilePath
     };
   }
 }
