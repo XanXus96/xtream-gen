@@ -100,6 +100,11 @@ async function extractXtreamCodesFromWebsite(url) {
               https_port: si.https_port,
               server_protocol: si.server_protocol,
               status: "active",
+              m3u_url: `${(code.host.includes("http") ? "" : "http://") + code.host}:${
+              code.port
+            }/get.php?username=${code.username}&password=${
+              code.password
+            }`,
               live_categories: resCat.data?.map(c => c.category_name)
             });
             verifiedCount++;
