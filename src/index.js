@@ -104,7 +104,7 @@ async function extractXtreamCodesFromWebsite(url) {
               code.port
             }/get.php?username=${code.username}&password=${
               code.password
-            }`,
+            }&type=m3u_plus`,
               live_categories: resCat.data?.map(c => c.category_name)
             });
             verifiedCount++;
