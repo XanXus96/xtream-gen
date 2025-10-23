@@ -72,19 +72,24 @@ async function extractXtreamCodesFromWebsite(url) {
 
       for (const code of jsonArray) {
         try {
-          const res = await axios.get(
-            `${(code.host.includes("http") ? "" : "http://") + code.host}:${
+          const url = `${(code.host.includes("http") ? "" : "http://") + code.host}:${
               code.port
             }/player_api.php?username=${code.username}&password=${
               code.password
-            }`,
+            }`
+          const res = await axios.get(
+            url,
             { timeout: 10000 }
           );
 
           if (res.data.user_info && res.data.user_info.auth === 1) {
             const si = res.data.server_info;
             const ui = res.data.user_info;
-            result.push({
+            const resCat = await axios.get(
+              `${url}&action=get_live_categories`,
+              { timeout: 10000 }
+            );
+            result.unshift({
               username: ui.username,
               password: ui.password,
               expires_at: new Date(ui.exp_date * 1000).toLocaleDateString(),
@@ -94,8 +99,8 @@ async function extractXtreamCodesFromWebsite(url) {
               port: si.port,
               https_port: si.https_port,
               server_protocol: si.server_protocol,
-              timezone: si.timezone,
               status: "active",
+              live_categories: resCat.data?.map(c => c.category_name)
             });
             verifiedCount++;
           }
